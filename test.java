@@ -1,17 +1,16 @@
-package com.hsbc.cmva.scp.api.gateway.filter;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.route.Route;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.test.context.support.TestSecurityContextHolder;
+import org.springframework.security.test.context.support.TestingAuthenticationToken;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.ServerWebExchangeUtils;
 import reactor.core.publisher.Context;
@@ -19,28 +18,29 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.net.URI;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AddUserHeaderAndParamFilterTest {
 
     private AddUserHeaderAndParamFilter filter;
-    private AuthorizationConfiguration mockAuthConfig;
+
+    @Mock
+    private AuthorizationConfiguration authorizationConfiguration;
 
     @BeforeEach
     void setUp() {
-        mockAuthConfig = mock(AuthorizationConfiguration.class);
-        filter = new AddUserHeaderAndParamFilter(mockAuthConfig);
+        MockitoAnnotations.openMocks(this);
+        filter = new AddUserHeaderAndParamFilter(authorizationConfiguration);
     }
 
-    // Metoda authContextWithJwtClaim jak w Twoim przykładzie
+    // Metoda authContextWithJwtClaim dostosowana do AuthenticatedUser (jak w Zuul testach)
     private Context authContextWithJwtClaim(String claimKey, String claimValue) {
-        Jwt jwt = mock(Jwt.class);
-        when(jwt.getClaimAsString(claimKey)).thenReturn(claimValue);
-        TestingAuthenticationToken auth = new TestingAuthenticationToken(jwt, null);
+        AuthenticatedUser authenticatedUser = (claimValue != null) ? new AuthenticatedUser(claimValue) : null;  // Zakładam konstruktor z userId
+        TestingAuthenticationToken auth = new TestingAuthenticationToken(authenticatedUser, null);
         auth.setAuthenticated(true);
         return ReactiveSecurityContextHolder.withAuthentication(auth);
     }
@@ -70,7 +70,7 @@ class AddUserHeaderAndParamFilterTest {
     @Test
     void shouldApplyFilterAndOverrideValuesWhenAuthenticatedAndEmployeeIdClaimPresent() {
         // Given
-        when(mockAuthConfig.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
+        when(authorizationConfiguration.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
         ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
 
         // When
@@ -139,7 +139,7 @@ class AddUserHeaderAndParamFilterTest {
     @Test
     void shouldAddUserToQueryParams() {
         // Given
-        when(mockAuthConfig.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
+        when(authorizationConfiguration.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
         ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
 
         // When
