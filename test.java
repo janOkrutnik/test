@@ -1,24 +1,27 @@
+package com.hsbc.cmva.scp.api.gateway.filter;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.cloud.gateway.route.Route;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.test.context.support.TestSecurityContextHolder;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.ServerWebExchangeUtils;
+import reactor.core.publisher.Context;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.net.URI;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,33 +29,138 @@ class AddUserHeaderAndParamFilterTest {
 
     private AddUserHeaderAndParamFilter filter;
     private AuthorizationConfiguration mockAuthConfig;
-    private Authentication mockAuth;
-    private TestingAuthenticationToken mockToken;
-    private AtomicReference<ServerWebExchange> capturedExchange;
 
     @BeforeEach
     void setUp() {
-        // Mock AuthorizationConfiguration
         mockAuthConfig = mock(AuthorizationConfiguration.class);
-        when(mockAuthConfig.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test")); // Domyślna konfiguracja
         filter = new AddUserHeaderAndParamFilter(mockAuthConfig);
-
-        // Mock Authentication i Security Context
-        mockAuth = mock(Authentication.class);
-        mockToken = new TestingAuthenticationToken("user", "pass");
-        mockToken.setDetails(new Jwt(Map.of("employeeId", "original-employee-id"))); // Domyślny claim
-        when(mockAuth.getPrincipal()).thenReturn(mockToken);
-
-        // Ustaw kontekst security
-        ReactiveSecurityContextHolder.getContext().contextWrite(securityContext -> {
-            securityContext.setAuthentication(mockAuth);
-            return securityContext;
-        });
-
-        // Inicjalizacja capturedExchange dla mock chain
-        capturedExchange = new AtomicReference<>();
     }
 
+    // Metoda authContextWithJwtClaim jak w Twoim przykładzie
+    private Context authContextWithJwtClaim(String claimKey, String claimValue) {
+        Jwt jwt = mock(Jwt.class);
+        when(jwt.getClaimAsString(claimKey)).thenReturn(claimValue);
+        TestingAuthenticationToken auth = new TestingAuthenticationToken(jwt, null);
+        auth.setAuthenticated(true);
+        return ReactiveSecurityContextHolder.withAuthentication(auth);
+    }
+
+    @Test
+    void shouldApplyFilterWhenAuthenticatedAndEmployeeIdClaimPresent() {
+        // Given
+        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
+
+        // When
+        AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+        GatewayFilterChain mockChain = mutatedExchange -> {
+            capturedExchange.set(mutatedExchange);
+            return Mono.empty();
+        };
+
+        StepVerifier.create(filter.filter(exchange, mockChain)
+                .contextWrite(authContextWithJwtClaim("employeeId", "original-employee-id")))
+            .expectComplete()
+            .verify();
+
+        // Then
+        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+        assertThat(mutatedRequest.getHeaders().getFirst("userId")).isEqualTo("original-employee-id");
+    }
+
+    @Test
+    void shouldApplyFilterAndOverrideValuesWhenAuthenticatedAndEmployeeIdClaimPresent() {
+        // Given
+        when(mockAuthConfig.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
+        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
+
+        // When
+        AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+        GatewayFilterChain mockChain = mutatedExchange -> {
+            capturedExchange.set(mutatedExchange);
+            return Mono.empty();
+        };
+
+        StepVerifier.create(filter.filter(exchange, mockChain)
+                .contextWrite(authContextWithJwtClaim("employeeId", "original-employee-id")))
+            .expectComplete()
+            .verify();
+
+        // Then
+        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+        assertThat(mutatedRequest.getHeaders().getFirst("userId")).isEqualTo("original-employee-id");
+        assertThat(mutatedRequest.getURI().getQuery()).contains("user=original-employee-id");
+    }
+
+    @Test
+    void shouldNotApplyFilterWhenAuthenticatedButEmployeeIdClaimNull() {
+        // Given
+        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
+
+        // When
+        AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+        GatewayFilterChain mockChain = mutatedExchange -> {
+            capturedExchange.set(mutatedExchange);
+            return Mono.empty();
+        };
+
+        StepVerifier.create(filter.filter(exchange, mockChain)
+                .contextWrite(authContextWithJwtClaim("employeeId", null)))
+            .expectComplete()
+            .verify();
+
+        // Then
+        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+        assertThat(mutatedRequest.getHeaders().get("userId")).isNullOrEmpty();
+        assertThat(mutatedRequest.getURI().getQuery()).doesNotContain("user=");
+    }
+
+    @Test
+    void shouldNotApplyFilterWhenNotAuthenticated() {
+        // Given
+        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
+
+        // When
+        AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+        GatewayFilterChain mockChain = mutatedExchange -> {
+            capturedExchange.set(mutatedExchange);
+            return Mono.empty();
+        };
+
+        StepVerifier.create(filter.filter(exchange, mockChain))
+            .expectComplete()
+            .verify();
+
+        // Then
+        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+        assertThat(mutatedRequest.getHeaders().get("userId")).isNullOrEmpty();
+        assertThat(mutatedRequest.getURI().getQuery()).doesNotContain("user=");
+    }
+
+    @Test
+    void shouldAddUserToQueryParams() {
+        // Given
+        when(mockAuthConfig.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
+        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
+
+        // When
+        AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+        GatewayFilterChain mockChain = mutatedExchange -> {
+            capturedExchange.set(mutatedExchange);
+            return Mono.empty();
+        };
+
+        StepVerifier.create(filter.filter(exchange, mockChain)
+                .contextWrite(authContextWithJwtClaim("employeeId", "original-employee-id")))
+            .expectComplete()
+            .verify();
+
+        // Then
+        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+        assertThat(mutatedRequest.getHeaders().getFirst("userId")).isEqualTo("original-employee-id");
+        assertThat(mutatedRequest.getURI().getQuery()).contains("user=original-employee-id");
+    }
+
+    // Metoda pomocnicza buildExchange
     private ServerWebExchange buildExchange(String bodyJson, String serviceId, HttpMethod method) {
         MockServerHttpRequest.Builder requestBuilder = MockServerHttpRequest.method(method, "/test");
         if (bodyJson != null) {
@@ -61,111 +169,5 @@ class AddUserHeaderAndParamFilterTest {
         ServerWebExchange exchange = MockServerWebExchange.from(requestBuilder.build());
         exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR, new Route(serviceId, URI.create("http://test")));
         return exchange;
-    }
-
-    @Test
-    void shouldApplyFilterWhenAuthenticatedAndEmployeeIdClaimPresent() {
-        // Given
-        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
-
-        // Mock chain
-        GatewayFilterChain mockChain = mutatedExchange -> {
-            capturedExchange.set(mutatedExchange);
-            return Mono.empty();
-        };
-
-        // When
-        filter.filter(exchange, mockChain).block();
-
-        // Then
-        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
-        assertThat(mutatedRequest.getHeaders().getFirst("userId")).isEqualTo("original-employee-id");
-        assertThat(mutatedRequest.getHeaders().getFirst("user")).isEqualTo("original-employee-id");
-    }
-
-    @Test
-    void shouldApplyFilterAndOverrideValuesWhenAuthenticatedAndEmployeeIdClaimPresent() {
-        // Given
-        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
-
-        // Mock chain
-        GatewayFilterChain mockChain = mutatedExchange -> {
-            capturedExchange.set(mutatedExchange);
-            return Mono.empty();
-        };
-
-        // When
-        filter.filter(exchange, mockChain).block();
-
-        // Then
-        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
-        assertThat(mutatedRequest.getHeaders().getFirst("userId")).isEqualTo("original-employee-id");
-        assertThat(mutatedRequest.getHeaders().getFirst("user")).isEqualTo("original-employee-id");
-        assertThat(mutatedRequest.getURI().getQuery()).contains("user=original-employee-id");
-    }
-
-    @Test
-    void shouldNotApplyFilterWhenAuthenticatedButEmployeeIdClaimNull() {
-        // Given
-        mockToken.setDetails(new Jwt(new HashMap<>())); // Usuń employeeId
-        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
-
-        // Mock chain
-        GatewayFilterChain mockChain = mutatedExchange -> {
-            capturedExchange.set(mutatedExchange);
-            return Mono.empty();
-        };
-
-        // When
-        filter.filter(exchange, mockChain).block();
-
-        // Then
-        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
-        assertThat(mutatedRequest.getHeaders().get("userId")).isNullOrEmpty();
-        assertThat(mutatedRequest.getHeaders().get("user")).isNullOrEmpty();
-        assertThat(mutatedRequest.getURI().getQuery()).doesNotContain("user=");
-    }
-
-    @Test
-    void shouldNotApplyFilterWhenNotAuthenticated() {
-        // Given
-        ReactiveSecurityContextHolder.resetContext(); // Wyczyść kontekst
-        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
-
-        // Mock chain
-        GatewayFilterChain mockChain = mutatedExchange -> {
-            capturedExchange.set(mutatedExchange);
-            return Mono.empty();
-        };
-
-        // When
-        filter.filter(exchange, mockChain).block();
-
-        // Then
-        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
-        assertThat(mutatedRequest.getHeaders().get("userId")).isNullOrEmpty();
-        assertThat(mutatedRequest.getHeaders().get("user")).isNullOrEmpty();
-        assertThat(mutatedRequest.getURI().getQuery()).doesNotContain("user=");
-    }
-
-    @Test
-    void shouldAddUserToQueryParams() {
-        // Given
-        ServerWebExchange exchange = buildExchange(null, "service-test", HttpMethod.GET);
-
-        // Mock chain
-        GatewayFilterChain mockChain = mutatedExchange -> {
-            capturedExchange.set(mutatedExchange);
-            return Mono.empty();
-        };
-
-        // When
-        filter.filter(exchange, mockChain).block();
-
-        // Then
-        ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
-        assertThat(mutatedRequest.getHeaders().getFirst("userId")).isEqualTo("original-employee-id");
-        assertThat(mutatedRequest.getHeaders().getFirst("user")).isEqualTo("original-employee-id");
-        assertThat(mutatedRequest.getURI().getQuery()).contains("user=original-employee-id");
     }
 }
