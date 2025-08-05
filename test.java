@@ -1,71 +1,110 @@
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
-import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.server.ServerWebExchange;
-import org.springframework.web.util.UriComponentsBuilder;
-import reactor.core.publisher.Mono;
+@Test
+void shouldApplyFilterWhenAuthenticatedAndEmployeeIdClaimPresent() {
+    // Given
+    AuthorizationConfiguration mockAuthConfig = mock(AuthorizationConfiguration.class);
+    AddUserHeaderAndParamFilter filter = new AddUserHeaderAndParamFilter(mockAuthConfig);
 
-import java.net.URI;
-import java.util.Optional;
+    ServerHttpRequest mockRequest = MockServerHttpRequest.get("/test").build();
+    ServerWebExchange exchange = MockServerWebExchange.from(mockRequest);
 
-@Component
-@Order(100)  // Analogicznie do filterOrder w Zuul
-public class AddUserHeaderAndParamFilter implements GlobalFilter {
+    Authentication mockAuth = mock(Authentication.class);
+    TestingAuthenticationToken mockToken = new TestingAuthenticationToken("user", "pass");
+    mockToken.setDetails(new Jwt(Map.of("employeeId", "original-employee-id")));
+    when(mockAuth.getPrincipal()).thenReturn(mockToken);
 
-    private final AuthorizationConfiguration authorizationConfiguration;
+    ReactiveSecurityContextHolder.getContext().contextWrite(securityContext -> {
+        securityContext.setAuthentication(mockAuth);
+        return securityContext;
+    });
 
-    public AddUserHeaderAndParamFilter(AuthorizationConfiguration authorizationConfiguration) {
-        this.authorizationConfiguration = authorizationConfiguration;
-    }
+    // Mock chain to capture mutated exchange
+    AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+    GatewayFilterChain mockChain = mutatedExchange -> {
+        capturedExchange.set(mutatedExchange);
+        return Mono.empty();
+    };
 
-    @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        return ReactiveSecurityContextHolder.getContext()
-            .map(securityContext -> (AuthenticatedUser) securityContext.getAuthentication().getPrincipal())
-            .defaultIfEmpty(null)
-            .flatMap(authenticatedUser -> {
-                String userId = (authenticatedUser != null) ? authenticatedUser.getUserId() : null;
+    // When
+    filter.filter(exchange, mockChain).block();
 
-                if (userId == null || !StringUtils.hasText(userId)) {
-                    // Skip jeśli brak userId (analogicznie do shouldFilter w Zuul)
-                    return chain.filter(exchange);
-                }
+    // Then
+    ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+    assertThat(mutatedRequest.getHeaders().getFirst("user")).isEqualTo("original-employee-id");
+}
 
-                ServerHttpRequest request = exchange.getRequest();
-                String serviceId = extractServiceId(exchange);  // Zakładam, że masz metodę jak w poprzednich filtrach
 
-                // Buduj mutated request
-                ServerHttpRequest.Builder mutatedRequestBuilder = request.mutate();
 
-                // Dodaj header "user"
-                mutatedRequestBuilder.header("user", userId);
+@Test
+void shouldApplyFilterAndOverrideValuesWhenAuthenticatedAndEmployeeIdClaimPresent() {
+    // Given
+    AuthorizationConfiguration mockAuthConfig = mock(AuthorizationConfiguration.class);
+    when(mockAuthConfig.getServicesToAddUserAsQueryParam()).thenReturn(Set.of("service-test"));
+    AddUserHeaderAndParamFilter filter = new AddUserHeaderAndParamFilter(mockAuthConfig);
 
-                // Dodaj query param "user" jeśli serviceId w konfiguracji
-                if (serviceId != null && authorizationConfiguration.getServicesToAddUserAsQueryParam().contains(serviceId)) {
-                    URI originalUri = request.getURI();
-                    URI newUri = UriComponentsBuilder.fromUri(originalUri)
-                        .queryParam("user", userId)
-                        .build().toUri();
-                    mutatedRequestBuilder.uri(newUri);
-                }
+    ServerHttpRequest mockRequest = MockServerHttpRequest.get("/test?user=old-value").build();
+    ServerWebExchange exchange = MockServerWebExchange.from(mockRequest);
+    exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR, new Route("service-test", URI.create("lb://service-test")));
 
-                // Zbuduj nowy exchange z mutated request
-                ServerWebExchange mutatedExchange = exchange.mutate()
-                    .request(mutatedRequestBuilder.build())
-                    .build();
+    Authentication mockAuth = mock(Authentication.class);
+    TestingAuthenticationToken mockToken = new TestingAuthenticationToken("user", "pass");
+    mockToken.setDetails(new Jwt(Map.of("employeeId", "original-employee-id")));
+    when(mockAuth.getPrincipal()).thenReturn(mockToken);
 
-                return chain.filter(mutatedExchange);
-            });
-    }
+    ReactiveSecurityContextHolder.getContext().contextWrite(securityContext -> {
+        securityContext.setAuthentication(mockAuth);
+        return securityContext;
+    });
 
-    // Metoda pomocnicza do extract serviceId (jak w poprzednich kodach)
-    private String extractServiceId(ServerWebExchange exchange) {
-        Route route = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR);
-        return (route != null) ? route.getId() : null;  // Lub dostosuj do Twojego sposobu pobierania
-    }
+    // Mock chain to capture mutated exchange
+    AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+    GatewayFilterChain mockChain = mutatedExchange -> {
+        capturedExchange.set(mutatedExchange);
+        return Mono.empty();
+    };
+
+    // When
+    filter.filter(exchange, mockChain).block();
+
+    // Then
+    ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+    assertThat(mutatedRequest.getHeaders().getFirst("user")).isEqualTo("original-employee-id");
+    assertThat(mutatedRequest.getURI().getQuery()).contains("user=original-employee-id");  // Nadpisuje old-value
+}
+
+
+
+
+@Test
+void shouldNotApplyFilterWhenAuthenticatedButEmployeeIdClaimNull() {
+    // Given
+    AuthorizationConfiguration mockAuthConfig = mock(AuthorizationConfiguration.class);
+    AddUserHeaderAndParamFilter filter = new AddUserHeaderAndParamFilter(mockAuthConfig);
+
+    ServerHttpRequest mockRequest = MockServerHttpRequest.get("/test").build();
+    ServerWebExchange exchange = MockServerWebExchange.from(mockRequest);
+
+    Authentication mockAuth = mock(Authentication.class);
+    TestingAuthenticationToken mockToken = new TestingAuthenticationToken("user", "pass");
+    mockToken.setDetails(new Jwt(Map.of()));  // Brak employeeId
+    when(mockAuth.getPrincipal()).thenReturn(mockToken);
+
+    ReactiveSecurityContextHolder.getContext().contextWrite(securityContext -> {
+        securityContext.setAuthentication(mockAuth);
+        return securityContext;
+    });
+
+    // Mock chain to capture mutated exchange
+    AtomicReference<ServerWebExchange> capturedExchange = new AtomicReference<>();
+    GatewayFilterChain mockChain = mutatedExchange -> {
+        capturedExchange.set(mutatedExchange);
+        return Mono.empty();
+    };
+
+    // When
+    filter.filter(exchange, mockChain).block();
+
+    // Then
+    ServerHttpRequest mutatedRequest = capturedExchange.get().getRequest();
+    assertThat(mutatedRequest.getHeaders().get("user")).isNullOrEmpty();
+    assertThat(mutatedRequest.getURI().getQuery()).doesNotContain("user=");
 }
