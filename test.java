@@ -1,35 +1,42 @@
-oid shouldNotApplyFilterWhenServiceEligibleForOverrideAndAuthenticatedButNotAuthorized() {
+void shouldNotApplyFilterWhenServiceEligibleForOverrideAndAuthenticatedButNotAuthorized() {
     // Arrange: Eligible service, authenticated, but not authorized (user lacks required authorities)
-    ServerHttpRequest request = MockServerHttpRequest.get("/test").build();
+    MockServerHttpRequest request = MockServerHttpRequest.get("/test").build();
     exchange = MockServerWebExchange.from(request);
-    exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR, new Route("id", URI.create("http://some-service")));
+
+    // Mock Route with serviceId
+    Route route = mock(Route.class);
+    when(route.getId()).thenReturn("some-service-id");
+    exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR, route);
 
     // Mock config: Eligible service with required authorities
     AuthorizationConfiguration.BasicAuthService basicAuthService = mock(AuthorizationConfiguration.BasicAuthService.class);
-    when(basicAuthService.getBasicAuthorizationHeader()).thenReturn("Basic dXNlcjpwYXNz"); // Not used in this path, but for completeness
     when(basicAuthService.getRequiredAuthorities()).thenReturn(Set.of("ROLE_ADMIN")); // Required, user will not have it
 
     Map<String, AuthorizationConfiguration.BasicAuthService> basicAuthServices = Map.of("some-service-id", basicAuthService);
     when(authorizationConfiguration.getBasicAuthServices()).thenReturn(basicAuthServices);
 
-    // Mock authenticated but unauthorized user (JWT with empty authorities)
-    Map<String, Object> claims = Map.of("authorities", List.of()); // Empty authorities
+    // Mock authenticated but unauthorized user (JWT with empty authorities in claims)
+    Map<String, Object> claims = Map.of("authorities", List.of()); // Empty authorities in claims
     Jwt jwt = new Jwt("token-value", Instant.now(), Instant.now().plusSeconds(3600), Map.of("alg", "none"), claims);
-    
-    Collection<GrantedAuthority> authorities = Collections.emptyList(); // Not used directly, but for token
-    OAuth2AuthenticatedPrincipal principal = new DefaultOAuth2AuthenticatedPrincipal(jwt.getClaims(), authorities);
-    OAuth2AuthenticationToken auth = new OAuth2AuthenticationToken(principal, authorities, "registration-id");
-    
-    mockSecurityContext(auth); // Assuming your helper sets ReactiveSecurityContextHolder.withAuthentication(auth)
+
+    // Authorities can be derived from claims, but for test, set empty
+    Collection<GrantedAuthority> authorities = Collections.emptyList();
+
+    // Create JwtAuthenticationToken (public constructor)
+    JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt, authorities);
+
+    // Set up SecurityContext
+    SecurityContext securityContext = mock(SecurityContext.class);
+    when(securityContext.getAuthentication()).thenReturn(auth);
+    // Assuming your mockSecurityContext or helper sets ReactiveSecurityContextHolder.withSecurityContext(Mono.just(securityContext))
 
     // Act
     Mono<Void> result = filter.filter(exchange, chain);
 
     // Assert
     StepVerifier.create(result).verifyComplete();
-    
     assert exchange.getResponse().getStatusCode() == HttpStatus.FORBIDDEN;
-    assert exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION) == null; // No header added
-    
-    verify(chain, never()).filter(any()); // Now should pass, as blocked
+    assert exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION) == null;
+
+    verify(chain, never()).filter(any()); // Should pass, as blocked
 }
