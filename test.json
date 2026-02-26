@@ -1,0 +1,333 @@
+{
+  "_llm_processing": {
+    "version": "1.0",
+    "purpose": "Template for generating technical requirements in banking IT projects. The LLM processes input data (emails, meeting transcripts, notes) and populates the structure below.",
+    "instructions": [
+      "Analyze all input sources (input_sources) and extract requirements.",
+      "Each requirement must have a unique identifier and traceability link to its source.",
+      "If information is incomplete, mark the field as '[TBD]' and add a comment in the gaps_and_ambiguities section.",
+      "Prioritize requirements using the MoSCoW methodology.",
+      "Pay special attention to regulatory requirements (KNF, GDPR, PSD2, AML/CFT).",
+      "Identify dependencies between requirements and systems.",
+      "Propose acceptance criteria in Given-When-Then format where possible."
+    ],
+    "output_language": "en",
+    "confidence_threshold": "Mark extraction confidence for each requirement: high / medium / low"
+  },
+
+  "project_metadata": {
+    "project_id": "",
+    "project_name": "",
+    "business_domain": "",
+    "business_domain_enum": ["retail banking", "corporate banking", "capital markets", "risk management", "compliance", "payments", "lending", "cards", "AML/CFT", "other"],
+    "project_type": "",
+    "project_type_enum": ["new system", "modernization", "migration", "integration", "regulatory change", "process optimization"],
+    "priority": "",
+    "priority_enum": ["critical", "high", "medium", "low"],
+    "requested_by": "",
+    "business_owner": "",
+    "it_owner": "",
+    "created_date": "",
+    "target_delivery_date": "",
+    "regulatory_deadline": "",
+    "budget_category": ""
+  },
+
+  "input_sources": [
+    {
+      "source_id": "SRC-001",
+      "type": "",
+      "type_enum": ["email", "meeting transcript", "business document", "note", "Jira ticket", "RFC", "risk analysis", "audit report", "external regulation"],
+      "title": "",
+      "date": "",
+      "participants": [],
+      "raw_content_summary": "",
+      "key_decisions": [],
+      "open_questions": []
+    }
+  ],
+
+  "stakeholders": [
+    {
+      "name": "",
+      "role": "",
+      "role_enum": ["business sponsor", "product owner", "architect", "business analyst", "systems analyst", "developer", "tester", "compliance officer", "DPO", "security officer", "end user"],
+      "department": "",
+      "responsibility": "",
+      "contact": ""
+    }
+  ],
+
+  "business_context": {
+    "problem_statement": "",
+    "business_objectives": [],
+    "expected_benefits": [],
+    "kpis": [
+      {
+        "name": "",
+        "current_value": "",
+        "target_value": "",
+        "measurement_method": ""
+      }
+    ],
+    "impacted_processes": [],
+    "impacted_customer_segments": []
+  },
+
+  "functional_requirements": [
+    {
+      "req_id": "FR-001",
+      "title": "",
+      "description": "",
+      "user_story": "As a [role] I want [action] so that [business goal]",
+      "priority": "",
+      "priority_enum": ["must have", "should have", "could have", "won't have"],
+      "source_refs": ["SRC-001"],
+      "extraction_confidence": "",
+      "business_rules": [],
+      "acceptance_criteria": [
+        {
+          "given": "",
+          "when": "",
+          "then": ""
+        }
+      ],
+      "ui_ux_notes": "",
+      "data_involved": [],
+      "dependencies": [],
+      "assumptions": [],
+      "open_questions": []
+    }
+  ],
+
+  "non_functional_requirements": {
+    "performance": [
+      {
+        "req_id": "NFR-PERF-001",
+        "description": "",
+        "metric": "",
+        "target_value": "",
+        "measurement_conditions": "",
+        "priority": "",
+        "source_refs": []
+      }
+    ],
+    "availability": [
+      {
+        "req_id": "NFR-AVAIL-001",
+        "description": "",
+        "sla_target": "",
+        "rpo": "",
+        "rto": "",
+        "maintenance_window": "",
+        "source_refs": []
+      }
+    ],
+    "scalability": [
+      {
+        "req_id": "NFR-SCAL-001",
+        "description": "",
+        "current_load": "",
+        "projected_load": "",
+        "growth_horizon": "",
+        "source_refs": []
+      }
+    ],
+    "usability": [
+      {
+        "req_id": "NFR-USE-001",
+        "description": "",
+        "target_user_group": "",
+        "accessibility_standard": "",
+        "source_refs": []
+      }
+    ]
+  },
+
+  "security_and_compliance": {
+    "data_classification": "",
+    "data_classification_enum": ["public", "internal", "confidential", "strictly confidential"],
+    "regulatory_requirements": [
+      {
+        "req_id": "SEC-REG-001",
+        "regulation": "",
+        "regulation_enum": ["GDPR", "PSD2", "KNF recommendations", "AML/CFT", "DORA", "MiFID II", "Basel III/IV", "EBA guidelines", "payment services act", "banking law", "other"],
+        "specific_articles": "",
+        "requirement_description": "",
+        "compliance_approach": "",
+        "deadline": "",
+        "source_refs": []
+      }
+    ],
+    "authentication_requirements": {
+      "method": "",
+      "method_enum": ["SSO", "MFA", "SCA (PSD2)", "qualified certificate", "biometrics"],
+      "details": ""
+    },
+    "authorization_model": "",
+    "encryption_requirements": {
+      "data_at_rest": "",
+      "data_in_transit": "",
+      "key_management": ""
+    },
+    "audit_trail_requirements": [],
+    "data_retention_policy": "",
+    "data_residency": "",
+    "pen_test_required": false,
+    "security_review_required": false
+  },
+
+  "integration_requirements": [
+    {
+      "req_id": "INT-001",
+      "source_system": "",
+      "target_system": "",
+      "integration_type": "",
+      "integration_type_enum": ["API REST", "API SOAP", "messaging (Kafka/MQ)", "batch/file", "event-driven", "database link", "ESB"],
+      "protocol": "",
+      "data_format": "",
+      "data_format_enum": ["JSON", "XML", "CSV", "ISO 20022", "SWIFT MT", "FIX", "other"],
+      "frequency": "",
+      "frequency_enum": ["real-time", "near real-time", "hourly", "daily", "on-demand", "batch"],
+      "volume_estimate": "",
+      "error_handling": "",
+      "retry_policy": "",
+      "sla": "",
+      "authentication": "",
+      "source_refs": []
+    }
+  ],
+
+  "data_requirements": {
+    "data_entities": [
+      {
+        "entity_name": "",
+        "description": "",
+        "key_attributes": [],
+        "data_source": "",
+        "personal_data": false,
+        "sensitive_data": false,
+        "retention_period": ""
+      }
+    ],
+    "data_migration": {
+      "required": false,
+      "source_systems": [],
+      "estimated_volume": "",
+      "migration_strategy": "",
+      "migration_strategy_enum": ["big bang", "phased", "parallel run", "trickle"],
+      "data_quality_rules": [],
+      "rollback_plan": ""
+    },
+    "reporting_requirements": [
+      {
+        "report_name": "",
+        "description": "",
+        "frequency": "",
+        "recipients": [],
+        "regulatory": false,
+        "format": ""
+      }
+    ]
+  },
+
+  "infrastructure_requirements": {
+    "deployment_model": "",
+    "deployment_model_enum": ["on-premise", "private cloud", "hybrid cloud", "public cloud (with KNF restrictions)"],
+    "environments_needed": [],
+    "environments_enum": ["DEV", "SIT", "UAT", "PRE-PROD", "PROD", "DR"],
+    "ci_cd_requirements": "",
+    "monitoring_requirements": [],
+    "logging_requirements": [],
+    "backup_requirements": ""
+  },
+
+  "constraints_and_dependencies": {
+    "technical_constraints": [],
+    "business_constraints": [],
+    "regulatory_constraints": [],
+    "dependencies_on_other_projects": [
+      {
+        "project_name": "",
+        "dependency_type": "",
+        "dependency_type_enum": ["blocking", "conditional", "informational"],
+        "expected_delivery": "",
+        "risk_if_delayed": ""
+      }
+    ],
+    "technology_stack_constraints": [],
+    "vendor_dependencies": []
+  },
+
+  "risk_assessment": [
+    {
+      "risk_id": "RISK-001",
+      "description": "",
+      "category": "",
+      "category_enum": ["technical", "business", "regulatory", "security", "operational", "vendor"],
+      "probability": "",
+      "probability_enum": ["low", "medium", "high"],
+      "impact": "",
+      "impact_enum": ["low", "medium", "high", "critical"],
+      "mitigation_strategy": "",
+      "owner": "",
+      "source_refs": []
+    }
+  ],
+
+  "testing_strategy": {
+    "test_levels": [],
+    "test_levels_enum": ["unit", "integration", "system", "UAT", "regression", "performance", "security", "DR"],
+    "test_environments": [],
+    "test_data_approach": "",
+    "test_data_approach_enum": ["synthetic", "anonymized production", "production subset"],
+    "automation_scope": "",
+    "uat_participants": [],
+    "go_nogo_criteria": []
+  },
+
+  "glossary": [
+    {
+      "term": "",
+      "definition": "",
+      "context": ""
+    }
+  ],
+
+  "gaps_and_ambiguities": [
+    {
+      "gap_id": "GAP-001",
+      "description": "",
+      "related_requirements": [],
+      "suggested_resolution": "",
+      "assigned_to": "",
+      "severity": "",
+      "severity_enum": ["blocking", "significant", "minor"]
+    }
+  ],
+
+  "traceability_matrix": [
+    {
+      "requirement_id": "",
+      "source_refs": [],
+      "business_objective_ref": "",
+      "test_case_ref": "",
+      "design_document_ref": ""
+    }
+  ],
+
+  "approval_workflow": {
+    "prepared_by": "",
+    "reviewed_by": [],
+    "approved_by": "",
+    "approval_date": "",
+    "version_history": [
+      {
+        "version": "1.0",
+        "date": "",
+        "author": "",
+        "changes": "Initial version generated by LLM"
+      }
+    ]
+  }
+}
